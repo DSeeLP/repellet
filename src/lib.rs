@@ -27,7 +27,7 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
 }
 
 pub trait CommandHandler<C: clap::Subcommand> {
-    fn handle_command(&self, command: C);
+    fn handle_command(&self, command: C) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait ErrorHandler {
@@ -75,7 +75,12 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
                     match command.try_get_matches_from_mut(line.split_whitespace()) {
                         Ok(cli) => {
                             if let Ok(cli) = C::from_arg_matches(&cli) {
-                                self.command_handler.handle_command(cli);
+                                if let Err(err) = self.command_handler.handle_command(cli) {
+                                    eprintln!(
+                                        "An error occurred while executing a command! {}",
+                                        err
+                                    );
+                                }
                             }
                         }
                         Err(clap_err) => self.error_handler.on_clap_error(clap_err),
