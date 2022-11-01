@@ -68,7 +68,7 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
             let readline = rl.readline(">> ");
             match readline {
                 Ok(line) => {
-                    if line == "" {
+                    if line.is_empty() {
                         continue;
                     }
 

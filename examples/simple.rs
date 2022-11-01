@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use clap::Subcommand;
 use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler};
 
@@ -15,7 +17,8 @@ pub fn main() {
 pub struct MyCommandHandler {}
 
 impl CommandHandler<SimpleCli> for MyCommandHandler {
-    fn handle_command(&self, command: SimpleCli) {
+    fn handle_command(&self, command: SimpleCli) -> Result<(), Box<dyn Error>> {
         println!("Yay! {:?}", command);
+        Ok(())
     }
 }
