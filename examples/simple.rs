@@ -5,11 +5,12 @@ use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler};
 
 #[derive(Debug, Subcommand)]
 pub enum SimpleCli {
-    Test,
+    Test { name: String },
+    Lol,
 }
 
 pub fn main() {
-    let processor: CliProcessor<SimpleCli> =
+    let mut processor: CliProcessor<SimpleCli> =
         CliProcessor::new(MyCommandHandler {}, DefaultErrorHandler::default());
     processor.run().unwrap();
 }
@@ -18,7 +19,14 @@ pub struct MyCommandHandler {}
 
 impl CommandHandler<SimpleCli> for MyCommandHandler {
     fn handle_command(&self, command: SimpleCli) -> Result<(), Box<dyn Error>> {
-        println!("Yay! {:?}", command);
+        match command {
+            SimpleCli::Test { name } => {
+                println!("Test from name {}", name)
+            }
+            SimpleCli::Lol => {
+                println!("Lol")
+            }
+        }
         Ok(())
     }
 }
