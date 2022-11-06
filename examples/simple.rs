@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use clap::Parser;
-use reedline::Reedline;
+
 use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler, ExecutionContext};
 
 #[derive(Debug, Parser)]
@@ -11,7 +11,7 @@ pub enum SimpleCli {
 }
 
 pub fn main() {
-    let mut processor: CliProcessor<SimpleCli> =
+    let processor: CliProcessor<SimpleCli> =
         CliProcessor::new(MyCommandHandler {}, DefaultErrorHandler::default());
     processor.run().unwrap();
 }
@@ -30,7 +30,6 @@ impl CommandHandler<SimpleCli> for MyCommandHandler {
             }
             SimpleCli::Clear => {
                 ctx.editor.clear_scrollback().unwrap();
-                ctx.error(clap::error::ErrorKind::InvalidValue, "").print();
             }
         }
         Ok(())

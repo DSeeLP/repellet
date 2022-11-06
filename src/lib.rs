@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use std::{error::Error, marker::PhantomData};
 
 use std::fmt::{Debug, Display};
