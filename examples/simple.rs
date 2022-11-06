@@ -12,7 +12,7 @@ pub enum SimpleCli {
 
 pub fn main() {
     let mut processor: CliProcessor<SimpleCli> =
-        CliProcessor::new(MyCommandHandler {}, DefaultErrorHandler::default());
+        CliProcessor::new(MyCommandHandler {}, DefaultErrorHandler::default()).with_highlighter();
     processor.run().unwrap();
 }
 

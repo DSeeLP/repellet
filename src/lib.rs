@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::{error::Error, marker::PhantomData};
 
@@ -5,8 +6,10 @@ use std::fmt::{Debug, Display};
 
 use clap::Command;
 
+use clap::error::{ContextKind, ContextValue};
 use clap::{error::ErrorKind, Error as ClapError};
-use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
+use nu_ansi_term::{Color, Style};
+use reedline::{DefaultPrompt, ExternalPrinter, Highlighter, Prompt, Reedline, Signal, StyledText};
 
 pub struct CliProcessor<C: clap::Parser> {
     command_handler: Box<dyn CommandHandler<C> + Send>,
@@ -28,7 +31,6 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
         let printer = ExternalPrinter::default();
         let editor = Reedline::create().with_external_printer(printer.clone());
         let prompt = DefaultPrompt::new();
-
         Self {
             command_handler: Box::new(command_handler),
             error_handler: Box::new(error_handler),
@@ -38,6 +40,53 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
             printer,
             _data: PhantomData,
         }
+    }
+
+    pub fn with_highlighter(mut self) -> Self {
+        self.editor = self.editor.with_highlighter(Box::new(SimpleHighlighter {
+            command: Mutex::new(self.command.clone()),
+        }));
+        self
+    }
+}
+
+pub struct SimpleHighlighter {
+    command: Mutex<Command>,
+}
+
+impl Highlighter for SimpleHighlighter {
+    fn highlight(&self, line: &str, cursor: usize) -> reedline::StyledText {
+        let mut styled = StyledText::new();
+        let lock = &mut *self.command.lock().unwrap();
+        let res = lock.try_get_matches_from_mut(line.split_whitespace());
+        let ok_style = Style::new().fg(Color::Green);
+        let err_style = Style::new().fg(Color::LightRed);
+        styled.push((Style::new(), line.into()));
+        match res {
+            Ok(ok) => {
+                println!("Ok: {:?}", ok);
+            }
+            Err(err) => {
+                let mut context: HashMap<ContextKind, ContextValue> =
+                    err.context().map(|v| (v.0, v.1.clone())).collect();
+                context.remove(&ContextKind::Usage);
+                context.remove(&ContextKind::Suggested);
+                match err.kind() {
+                    // ErrorKind::InvalidValue => todo!(),
+                    // ErrorKind::UnknownArgument => todo!(),
+                    // ErrorKind::InvalidSubcommand => todo!(),
+                    // ErrorKind::ArgumentConflict => todo!(),
+                    // ErrorKind::MissingRequiredArgument => todo!(),
+                    // ErrorKind::MissingSubcommand => todo!(),
+                    // ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => todo!(),
+                    kind => {
+                        println!("Unhandled kind: {:?}", kind);
+                    }
+                }
+                println!("Kind: '{:?}', Context: {:?}", err.kind(), context);
+            }
+        }
+        styled
     }
 }
 
