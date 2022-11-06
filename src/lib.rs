@@ -44,7 +44,7 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
 pub struct ExecutionContext<'a> {
     pub editor: &'a mut Reedline,
     pub printer: &'a ExternalPrinter<String>,
-    pub command: &'a Command,
+    pub command: &'a mut Command,
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -57,9 +57,13 @@ impl<'a> ExecutionContext<'a> {
     pub fn handle_error(&self, error: ClapError) {
         self.print(error.render());
     }
+
+    pub fn error(&mut self, kind: ErrorKind, message: impl Display) -> ClapError {
+        self.command.error(kind, message)
+    }
 }
 pub trait CommandHandler<C: clap::Parser> {
-    fn handle_command(&self, ctx: &ExecutionContext, command: C) -> Result<(), Box<dyn Error>>;
+    fn handle_command(&self, ctx: &mut ExecutionContext, command: C) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait ErrorHandler {
@@ -110,14 +114,14 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
         }
 
         match command.try_get_matches_from_mut(line.split_whitespace()) {
-            Ok(cli) => {
-                if let Ok(cli) = C::from_arg_matches(&cli) {
-                    let context = ExecutionContext {
+            Ok(cli_raw) => {
+                if let Ok(cli) = C::from_arg_matches(&cli_raw) {
+                    let mut context = ExecutionContext {
                         editor: &mut self.editor,
                         printer: &self.printer,
-                        command: &command,
+                        command,
                     };
-                    if let Err(err) = self.command_handler.handle_command(&context, cli) {
+                    if let Err(err) = self.command_handler.handle_command(&mut context, cli) {
                         eprintln!("An error occurred while executing a command! {}", err);
                     }
                 }

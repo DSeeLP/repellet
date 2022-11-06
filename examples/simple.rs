@@ -2,7 +2,7 @@ use std::error::Error;
 
 use clap::Parser;
 use reedline::Reedline;
-use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler};
+use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler, ExecutionContext};
 
 #[derive(Debug, Parser)]
 pub enum SimpleCli {
@@ -21,7 +21,7 @@ pub struct MyCommandHandler {}
 impl CommandHandler<SimpleCli> for MyCommandHandler {
     fn handle_command(
         &self,
-        editor: &mut Reedline,
+        ctx: &mut ExecutionContext,
         command: SimpleCli,
     ) -> Result<(), Box<dyn Error>> {
         match command {
@@ -29,7 +29,8 @@ impl CommandHandler<SimpleCli> for MyCommandHandler {
                 println!("Test from name {}", name)
             }
             SimpleCli::Clear => {
-                editor.clear_scrollback().unwrap();
+                ctx.editor.clear_scrollback().unwrap();
+                ctx.error(clap::error::ErrorKind::InvalidValue, "").print();
             }
         }
         Ok(())
