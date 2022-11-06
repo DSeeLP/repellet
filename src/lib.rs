@@ -1,6 +1,7 @@
+use std::sync::Mutex;
 use std::{error::Error, marker::PhantomData};
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use clap::Command;
 
@@ -40,8 +41,25 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
     }
 }
 
+pub struct ExecutionContext<'a> {
+    pub editor: &'a mut Reedline,
+    pub printer: &'a ExternalPrinter<String>,
+    pub command: &'a Command,
+}
+
+impl<'a> ExecutionContext<'a> {
+    #[inline]
+    pub fn print(&self, display: impl Display) {
+        self.printer.print(format!("{}", display)).unwrap();
+    }
+
+    #[inline]
+    pub fn handle_error(&self, error: ClapError) {
+        self.print(error.render());
+    }
+}
 pub trait CommandHandler<C: clap::Parser> {
-    fn handle_command(&self, editor: &mut Reedline, command: C) -> Result<(), Box<dyn Error>>;
+    fn handle_command(&self, ctx: &ExecutionContext, command: C) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait ErrorHandler {
@@ -59,12 +77,6 @@ pub trait ErrorHandler {
                 eprintln!("Invalid command {}", error);
             }
         }
-    }
-}
-
-impl dyn ErrorHandler {
-    pub fn default() -> DefaultErrorHandler {
-        DefaultErrorHandler {}
     }
 }
 
@@ -100,7 +112,12 @@ impl<C: clap::Parser + Debug> CliProcessor<C> {
         match command.try_get_matches_from_mut(line.split_whitespace()) {
             Ok(cli) => {
                 if let Ok(cli) = C::from_arg_matches(&cli) {
-                    if let Err(err) = self.command_handler.handle_command(&mut self.editor, cli) {
+                    let context = ExecutionContext {
+                        editor: &mut self.editor,
+                        printer: &self.printer,
+                        command: &command,
+                    };
+                    if let Err(err) = self.command_handler.handle_command(&context, cli) {
                         eprintln!("An error occurred while executing a command! {}", err);
                     }
                 }
