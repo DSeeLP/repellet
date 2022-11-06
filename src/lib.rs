@@ -7,23 +7,22 @@ use clap::Command;
 use clap::{error::ErrorKind, Error as ClapError};
 use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
 
-pub struct CliProcessor<C: clap::Subcommand> {
-    command_handler: Box<dyn CommandHandler<C>>,
-    error_handler: Box<dyn ErrorHandler>,
+pub struct CliProcessor<C: clap::Parser> {
+    command_handler: Box<dyn CommandHandler<C> + Send>,
+    error_handler: Box<dyn ErrorHandler + Send>,
     pub command: Command,
     pub editor: Reedline,
-    pub prompt: Box<dyn Prompt>,
+    pub prompt: Box<dyn Prompt + Send>,
     pub printer: ExternalPrinter<String>,
     _data: PhantomData<C>,
 }
 
-impl<C: clap::Subcommand + Debug> CliProcessor<C> {
+impl<C: clap::Parser + Debug> CliProcessor<C> {
     pub fn new(
-        command_handler: impl CommandHandler<C> + 'static,
-        error_handler: impl ErrorHandler + 'static,
+        command_handler: impl CommandHandler<C> + Send + 'static,
+        error_handler: impl ErrorHandler + Send + 'static,
     ) -> Self {
-        let command = Command::new("repl").multicall(true);
-        let mut command = C::augment_subcommands(command);
+        let mut command = C::command().multicall(true);
         command.build();
         let printer = ExternalPrinter::default();
         let editor = Reedline::create().with_external_printer(printer.clone());
@@ -41,8 +40,8 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
     }
 }
 
-pub trait CommandHandler<C: clap::Subcommand> {
-    fn handle_command(&self, command: C) -> Result<(), Box<dyn Error>>;
+pub trait CommandHandler<C: clap::Parser> {
+    fn handle_command(&self, editor: &mut Reedline, command: C) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait ErrorHandler {
@@ -74,8 +73,8 @@ pub struct DefaultErrorHandler {}
 
 impl ErrorHandler for DefaultErrorHandler {}
 
-impl<C: clap::Subcommand + Debug> CliProcessor<C> {
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+impl<C: clap::Parser + Debug> CliProcessor<C> {
+    pub fn run(mut self) -> Result<(), Box<dyn Error>> {
         let mut command = self.command.clone();
         loop {
             let sig = self.editor.read_line(&*self.prompt);
@@ -93,7 +92,7 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
         }
     }
 
-    fn execute_command(&self, command: &mut Command, line: &str) {
+    fn execute_command(&mut self, command: &mut Command, line: &str) {
         if line.is_empty() {
             return;
         }
@@ -101,7 +100,7 @@ impl<C: clap::Subcommand + Debug> CliProcessor<C> {
         match command.try_get_matches_from_mut(line.split_whitespace()) {
             Ok(cli) => {
                 if let Ok(cli) = C::from_arg_matches(&cli) {
-                    if let Err(err) = self.command_handler.handle_command(cli) {
+                    if let Err(err) = self.command_handler.handle_command(&mut self.editor, cli) {
                         eprintln!("An error occurred while executing a command! {}", err);
                     }
                 }

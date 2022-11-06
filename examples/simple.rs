@@ -1,12 +1,13 @@
 use std::error::Error;
 
-use clap::Subcommand;
+use clap::Parser;
+use reedline::Reedline;
 use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler};
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Parser)]
 pub enum SimpleCli {
     Test { name: String },
-    Lol,
+    Clear,
 }
 
 pub fn main() {
@@ -18,13 +19,17 @@ pub fn main() {
 pub struct MyCommandHandler {}
 
 impl CommandHandler<SimpleCli> for MyCommandHandler {
-    fn handle_command(&self, command: SimpleCli) -> Result<(), Box<dyn Error>> {
+    fn handle_command(
+        &self,
+        editor: &mut Reedline,
+        command: SimpleCli,
+    ) -> Result<(), Box<dyn Error>> {
         match command {
             SimpleCli::Test { name } => {
                 println!("Test from name {}", name)
             }
-            SimpleCli::Lol => {
-                println!("Lol")
+            SimpleCli::Clear => {
+                editor.clear_scrollback().unwrap();
             }
         }
         Ok(())
