@@ -2,7 +2,7 @@ use std::error::Error;
 
 use clap::Parser;
 
-use repllet::{CliProcessor, CommandHandler, DefaultErrorHandler, ExecutionContext};
+use repellet::{CliProcessor, CommandHandler, DefaultErrorHandler, ExecutionContext};
 
 #[derive(Debug, Parser)]
 pub enum SimpleCli {
