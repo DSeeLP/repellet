@@ -7,8 +7,13 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0.18", features = ["derive", "color"] }
+log = "0.4.17"
 reedline = { version = "0.14.0", features = ["external_printer"] }
 
 
 [[example]]
 name = "simple"
+
+[dev-dependencies]
+log = { version = "0.4.17", features = ["max_level_info"] }
+simplelog = "0.12.0"
