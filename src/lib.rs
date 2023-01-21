@@ -7,8 +7,10 @@ use std::fmt::{Debug, Display};
 
 use clap::Command;
 
+use clap::error::RichFormatter;
 use clap::{error::ErrorKind, Error as ClapError};
 use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
+use thiserror::Error;
 
 pub struct TermReader {
     pub editor: Reedline,
@@ -29,26 +31,23 @@ impl TermReader {
     }
 }
 
-pub struct CliProcessor<C: clap::Parser> {
-    command_handler: Box<dyn CommandHandler<C> + Send>,
-    error_handler: Box<dyn ErrorHandler + Send>,
+pub struct ReplContext<C: clap::Parser, Err: Debug + Display> {
+    handler: Box<dyn ReplHandler<C, Err = Err> + Send>,
     pub command: Command,
     pub reader: TermReader,
     _data: PhantomData<C>,
 }
 
-impl<C: clap::Parser + Debug> CliProcessor<C> {
+impl<C: clap::Parser + Debug, Err: Debug + Display> ReplContext<C, Err> {
     pub fn new(
         reader: TermReader,
-        command_handler: impl CommandHandler<C> + Send + 'static,
-        error_handler: impl ErrorHandler + Send + 'static,
+        handler: impl ReplHandler<C, Err = Err> + Send + 'static,
     ) -> Self {
         let mut command = C::command().multicall(true);
         command.build();
 
         Self {
-            command_handler: Box::new(command_handler),
-            error_handler: Box::new(error_handler),
+            handler: Box::new(handler),
             command,
             reader,
             _data: PhantomData,
@@ -77,83 +76,77 @@ impl<'a> ExecutionContext<'a> {
         self.command.error(kind, message)
     }
 }
-pub trait CommandHandler<C: clap::Parser> {
-    fn handle_command(&self, ctx: &mut ExecutionContext, command: C) -> Result<(), Box<dyn Error>>;
+pub trait ReplHandler<C: clap::Parser> {
+    type Err: Debug + Display;
+    fn on_command(&self, ctx: &mut ExecutionContext, command: C) -> Result<(), Self::Err>;
 }
 
-pub trait ErrorHandler {
-    fn on_interrupt(&self) {
-        std::process::exit(130);
-    }
-
-    fn on_eof(&self) {}
-    fn on_clap_error(&self, error: ClapError) {
-        match ClapError::kind(&error) {
-            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-                log::info!("{}", error);
-            }
-            _ => {
-                log::info!("Invalid command {}", error);
-            }
-        }
-    }
-
-    fn on_panic(&self, err: Box<dyn Any + Send>) {
-        log::error!("Command execution panicked!");
-    }
+#[derive(Debug, Error)]
+pub enum ReplError<Err: Debug + Display> {
+    #[error("Read was interrupted")]
+    Interrupt,
+    #[error("EOF occurred")]
+    EOF,
+    #[error(transparent)]
+    Clap(#[from] ClapError),
+    #[error("{0}")]
+    Parse(clap::error::Error<RichFormatter>),
+    #[error("Command execution panicked")]
+    Panic(Box<dyn Any + Send>),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("An error occurred while executing a command {0}")]
+    ExecutionError(Err),
 }
 
-#[derive(Debug, Default)]
-pub struct DefaultErrorHandler {}
-
-impl ErrorHandler for DefaultErrorHandler {}
-
-impl<C: clap::Parser + Debug> CliProcessor<C> {
-    pub fn run(mut self) -> Result<(), Box<dyn Error>> {
+impl<C: clap::Parser + Debug, Err: Error + Debug> ReplContext<C, Err> {
+    pub fn run(mut self) -> Result<(), ReplError<Err>> {
         let mut command = self.command.clone();
-        loop {
-            let sig = self.reader.editor.read_line(&*self.reader.prompt);
-            match sig {
-                Ok(Signal::Success(buffer)) => {
-                    let mtx = Mutex::new(&mut self);
-                    let cmd_mtx = Mutex::new(&mut command);
-                    if let Err(err) = catch_unwind(|| {
-                        let mut command = cmd_mtx.lock().unwrap();
-                        mtx.lock().unwrap().execute_command(&mut *command, &buffer);
-                        // self.execute_command(&mut command, &buffer);
-                    }) {
-                        self.error_handler.on_panic(err);
-                    }
-                }
-                Ok(Signal::CtrlC | Signal::CtrlD) => {
-                    self.error_handler.on_interrupt();
-                }
-                x => {
-                    log::error!("Reed failed: {:?}", x);
+        loop {}
+    }
+
+    pub fn read(&mut self, command: &mut Command) -> Result<(), ReplError<Err>> {
+        let sig = self.reader.editor.read_line(&*self.reader.prompt);
+        match sig {
+            Ok(Signal::Success(buffer)) => {
+                let mtx = Mutex::new(self);
+                let cmd_mtx = Mutex::new(command);
+                let catch_res = catch_unwind(|| {
+                    let mut command = cmd_mtx.lock().unwrap();
+                    mtx.lock().unwrap().execute_command(&mut *command, &buffer)
+                    // self.execute_command(&mut command, &buffer);
+                });
+                match catch_res {
+                    Ok(res) => res,
+                    Err(err) => Err(ReplError::Panic(err)),
                 }
             }
+            Ok(Signal::CtrlC) => Err(ReplError::Interrupt),
+            Ok(Signal::CtrlD) => Err(ReplError::EOF),
+            Err(err) => Err(ReplError::Io(err)),
         }
     }
 
-    fn execute_command(&mut self, command: &mut Command, line: &str) {
+    fn execute_command(&mut self, command: &mut Command, line: &str) -> Result<(), ReplError<Err>> {
         if line.is_empty() {
-            return;
+            return Ok(());
         }
 
         match command.try_get_matches_from_mut(line.split_whitespace()) {
-            Ok(cli_raw) => {
-                if let Ok(cli) = C::from_arg_matches(&cli_raw) {
+            Ok(cli_raw) => match C::from_arg_matches(&cli_raw) {
+                Ok(cli) => {
                     let mut context = ExecutionContext {
                         editor: &mut self.reader.editor,
                         printer: &self.reader.external_printer,
                         command,
                     };
-                    if let Err(err) = self.command_handler.handle_command(&mut context, cli) {
-                        log::error!("An error occurred while executing a command! {}", err);
-                    }
+                    self.handler
+                        .on_command(&mut context, cli)
+                        .map_err(|err| ReplError::ExecutionError(err))
                 }
-            }
-            Err(clap_err) => self.error_handler.on_clap_error(clap_err),
+                Err(err) => Err(ReplError::Parse(err)),
+            },
+            Err(err) => Err(ReplError::Parse(err)),
         }
     }
 }

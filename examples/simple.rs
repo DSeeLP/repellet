@@ -1,8 +1,8 @@
-use std::error::Error;
+use std::convert::Infallible;
 
 use clap::Parser;
 
-use repellet::{CliProcessor, CommandHandler, DefaultErrorHandler, ExecutionContext, TermReader};
+use repellet::{ExecutionContext, ReplContext, ReplHandler, TermReader};
 use simplelog::{Config, TermLogger};
 
 #[derive(Debug, Parser)]
@@ -21,19 +21,15 @@ pub fn main() {
         simplelog::ColorChoice::Auto,
     )
     .unwrap();
-    let processor: CliProcessor<SimpleCli> =
-        CliProcessor::new(reader, MyCommandHandler {}, DefaultErrorHandler::default());
+    let processor: ReplContext<SimpleCli, _> = ReplContext::new(reader, MyCommandHandler {});
     processor.run().unwrap();
 }
 
 pub struct MyCommandHandler {}
 
-impl CommandHandler<SimpleCli> for MyCommandHandler {
-    fn handle_command(
-        &self,
-        ctx: &mut ExecutionContext,
-        command: SimpleCli,
-    ) -> Result<(), Box<dyn Error>> {
+impl ReplHandler<SimpleCli> for MyCommandHandler {
+    type Err = Infallible;
+    fn on_command(&self, ctx: &mut ExecutionContext, command: SimpleCli) -> Result<(), Self::Err> {
         match command {
             SimpleCli::Test { name } => {
                 println!("Test from name {}", name)
