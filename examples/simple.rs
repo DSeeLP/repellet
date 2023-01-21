@@ -22,7 +22,9 @@ pub fn main() {
     )
     .unwrap();
     let processor: ReplContext<SimpleCli, _> = ReplContext::new(reader, MyCommandHandler {});
-    processor.run().unwrap();
+    processor
+        .read_loop(repellet::default_error_handler)
+        .unwrap();
 }
 
 pub struct MyCommandHandler {}

@@ -5,14 +5,21 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+default-error-handler = []
+
 [dependencies]
 clap = { version = ">4.0.18", features = ["derive", "color"] }
 reedline = { version = "0.14.0", features = ["external_printer"] }
 thiserror = "1.0.38"
-
+tracing = { version = "0.1.37", optional = true, default-features = false }
+log = { version = ">=0.4", optional = true, default-features = false }
 
 [[example]]
 name = "simple"
+required-features = ["default-error-handler", "log"]
 
 [dev-dependencies]
 simplelog = "0.12.0"
+log = ">=0.4"

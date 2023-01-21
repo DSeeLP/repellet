@@ -12,6 +12,10 @@ use clap::{error::ErrorKind, Error as ClapError};
 use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
 use thiserror::Error;
 
+#[cfg(feature = "default-error-handler")]
+#[cfg(not(any(feature = "tracing", feature = "log")))]
+compile_error!("Feature 'tracing' or 'log' must be activated");
+
 pub struct TermReader {
     pub editor: Reedline,
     pub prompt: Box<dyn Prompt + Send>,
@@ -76,6 +80,7 @@ impl<'a> ExecutionContext<'a> {
         self.command.error(kind, message)
     }
 }
+
 pub trait ReplHandler<C: clap::Parser> {
     type Err: Debug + Display;
     fn on_command(&self, ctx: &mut ExecutionContext, command: C) -> Result<(), Self::Err>;
@@ -99,13 +104,87 @@ pub enum ReplError<Err: Debug + Display> {
     ExecutionError(Err),
 }
 
+pub trait ErrorHandler<Err: Debug + Display>:
+    Fn(ReplError<Err>) -> Result<(), ReplError<Err>>
+{
+}
+
+impl<Err: ReplExecutionError, F: Fn(ReplError<Err>) -> Result<(), ReplError<Err>>> ErrorHandler<Err>
+    for F
+{
+}
+
+pub trait ReplExecutionError: Debug + Display {}
+
+impl<T: Debug + Display> ReplExecutionError for T {}
+
+#[allow(unused_variables)]
+pub fn default_error_handler<Err: ReplExecutionError>(
+    error: ReplError<Err>,
+) -> Result<(), ReplError<Err>> {
+    match &error {
+        ReplError::Interrupt | ReplError::EOF => Err(error),
+        ReplError::Clap(err) => {
+            match err.kind() {
+                ErrorKind::DisplayHelp
+                | ErrorKind::DisplayVersion
+                | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+                    let err = err.render();
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("{}", err);
+                    #[cfg(feature = "log")]
+                    log::warn!("{}", err);
+                }
+                err => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("{}", err);
+                    #[cfg(feature = "log")]
+                    log::warn!("{}", err);
+                }
+            };
+            Ok(())
+        }
+        ReplError::Parse(err) => {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("{}", err);
+            #[cfg(feature = "log")]
+            log::warn!("{}", err);
+            Ok(())
+        }
+        ReplError::Panic(_) => Err(error),
+        ReplError::Io(_) => Err(error),
+        ReplError::ExecutionError(err) => {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("{}", err);
+            #[cfg(feature = "log")]
+            log::warn!("{}", err);
+            Ok(())
+        }
+    }
+}
+
 impl<C: clap::Parser + Debug, Err: Error + Debug> ReplContext<C, Err> {
-    pub fn run(mut self) -> Result<(), ReplError<Err>> {
-        let mut command = self.command.clone();
-        loop {}
+    pub fn read_loop<F: ErrorHandler<Err>>(
+        mut self,
+        handle_error: F,
+    ) -> Result<(), ReplError<Err>> {
+        let command = &mut self.command.clone();
+        loop {
+            match self.read_with_command(command) {
+                Ok(_) => {}
+                Err(err) => {
+                    if let Err(err) = handle_error(err) {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+    }
+    pub fn read(&mut self) -> Result<(), ReplError<Err>> {
+        self.read_with_command(&mut self.command.clone())
     }
 
-    pub fn read(&mut self, command: &mut Command) -> Result<(), ReplError<Err>> {
+    pub fn read_with_command(&mut self, command: &mut Command) -> Result<(), ReplError<Err>> {
         let sig = self.reader.editor.read_line(&*self.reader.prompt);
         match sig {
             Ok(Signal::Success(buffer)) => {
