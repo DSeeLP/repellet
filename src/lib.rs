@@ -1,7 +1,7 @@
 use std::any::Any;
+use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::sync::Mutex;
-use std::{error::Error, marker::PhantomData};
 
 use std::fmt::{Debug, Display};
 
@@ -163,7 +163,7 @@ pub fn default_error_handler<Err: ReplExecutionError>(
     }
 }
 
-impl<C: clap::Parser + Debug, Err: Error + Debug> ReplContext<C, Err> {
+impl<C: clap::Parser + Debug, Err: Debug + Display> ReplContext<C, Err> {
     pub fn read_loop<F: ErrorHandler<Err>>(
         mut self,
         handle_error: F,
