@@ -33,6 +33,10 @@ impl TermReader {
             external_printer,
         }
     }
+
+    pub fn set_prompt<P: Prompt + Send + 'static>(&mut self, prompt: P) {
+        self.prompt = Box::new(prompt);
+    }
 }
 
 pub struct ReplContext<C: clap::Parser, Err: Debug + Display> {
