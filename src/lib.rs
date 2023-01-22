@@ -12,7 +12,7 @@ use clap::{error::ErrorKind, Error as ClapError};
 use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
 use thiserror::Error;
 
-#[cfg(feature = "default-error-handler")]
+#[cfg(feature = "default_error_handler")]
 #[cfg(not(any(feature = "tracing", feature = "log")))]
 compile_error!("Feature 'tracing' or 'log' must be activated");
 
@@ -118,6 +118,7 @@ pub trait ReplExecutionError: Debug + Display {}
 
 impl<T: Debug + Display> ReplExecutionError for T {}
 
+#[cfg(feature = "default_error_handler")]
 #[allow(unused_variables)]
 pub fn default_error_handler<Err: ReplExecutionError>(
     error: ReplError<Err>,

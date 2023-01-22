@@ -7,7 +7,7 @@ edition = "2021"
 
 [features]
 default = []
-default-error-handler = []
+default_error_handler = []
 
 [dependencies]
 clap = { version = ">4.0.18", features = ["derive", "color"] }
@@ -18,7 +18,7 @@ log = { version = ">=0.4", optional = true, default-features = false }
 
 [[example]]
 name = "simple"
-required-features = ["default-error-handler", "log"]
+required-features = ["default_error_handler", "log"]
 
 [dev-dependencies]
 simplelog = "0.12.0"
