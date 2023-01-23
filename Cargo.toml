@@ -8,6 +8,7 @@ edition = "2021"
 [features]
 default = []
 default_error_handler = []
+static_prompt = []
 
 [dependencies]
 clap = { version = ">4.0.18", features = ["derive", "color"] }

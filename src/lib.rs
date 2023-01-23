@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::sync::Mutex;
@@ -15,6 +16,11 @@ use thiserror::Error;
 #[cfg(feature = "default_error_handler")]
 #[cfg(not(any(feature = "tracing", feature = "log")))]
 compile_error!("Feature 'tracing' or 'log' must be activated");
+
+#[cfg(feature = "static_prompt")]
+mod prompt;
+#[cfg(feature = "static_prompt")]
+pub use prompt::*;
 
 pub struct TermReader {
     pub editor: Reedline,
