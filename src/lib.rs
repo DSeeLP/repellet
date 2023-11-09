@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::sync::Mutex;
@@ -10,7 +9,7 @@ use clap::Command;
 
 use clap::error::RichFormatter;
 use clap::{error::ErrorKind, Error as ClapError};
-use reedline::{DefaultPrompt, ExternalPrinter, Prompt, Reedline, Signal};
+use reedline::{DefaultPrompt, DefaultPromptSegment, ExternalPrinter, Prompt, Reedline, Signal};
 use thiserror::Error;
 
 #[cfg(feature = "default_error_handler")]
@@ -32,7 +31,10 @@ impl TermReader {
     pub fn new() -> TermReader {
         let external_printer = ExternalPrinter::default();
         let editor = Reedline::create().with_external_printer(external_printer.clone());
-        let prompt = DefaultPrompt::new();
+        let prompt = DefaultPrompt::new(
+            DefaultPromptSegment::Basic("> ".into()),
+            DefaultPromptSegment::Empty,
+        );
         Self {
             editor,
             prompt: Box::new(prompt),

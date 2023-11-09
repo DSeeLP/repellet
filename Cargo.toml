@@ -11,9 +11,9 @@ default_error_handler = []
 static_prompt = []
 
 [dependencies]
-clap = { version = ">4.0.18", features = ["derive", "color"] }
-reedline = { version = "0.14.0", features = ["external_printer"] }
-thiserror = "1.0.38"
+clap = { version = "4.4", features = ["derive", "color"] }
+reedline = { version = "0.25", features = ["external_printer"] }
+thiserror = ">=1.0.38"
 tracing = { version = "0.1.37", optional = true, default-features = false }
 log = { version = ">=0.4", optional = true, default-features = false }
 
